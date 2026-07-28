@@ -1,0 +1,830 @@
+--// ==========================================
+--// Pirno.ccx | Full HVH Edition v3.0 (Advanced + Keybinds Overlay + FPS/Ping + Config System + Thirdperson)
+--// ==========================================
+local Rayfield = loadstring(game:HttpGet("https://raw.githubusercontent.com/twistedk1d/BloxStrike/refs/heads/main/Source/UI/source.lua"))()
+
+--// Window creation
+local Window = Rayfield:CreateWindow({
+    Name = "Pirno.ccx | Full HVH v3.0 Ultimate",
+    Icon = 0,
+    LoadingTitle = "loading pirno.ccx (Blox Strike Ultimate HVH)",
+    LoadingSubtitle = "by .Sparky9971 & Enhanced",
+    ShowText = "Menu",
+    Theme = "Amethyst",
+    ToggleUIKeybind = Enum.KeyCode.RightShift,
+    DisableRayfieldPrompts = false,
+    DisableBuildWarnings = false,
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "Pirno.ccx",
+        FileName = "Pirno.ccx_hvh_v3"
+    }
+})
+
+--// Services & Globals
+local RS = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local CAS = game:GetService("ContextActionService")
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+local Stats = game:GetService("Stats")
+
+local player = Players.LocalPlayer
+local camera = Workspace.CurrentCamera
+local CharactersFolder = Workspace:WaitForChild("Characters", 10)
+
+--// ==========================================
+--// TABS
+--// ==========================================
+local Tab_Combat   = Window:CreateTab("Combat", "crosshair")
+local Tab_Visuals  = Window:CreateTab("Visuals", "eye")
+local Tab_Misc     = Window:CreateTab("Misc", "settings")
+local Tab_Keybinds = Window:CreateTab("Keybinds", "keyboard")
+local Tab_Skins    = Window:CreateTab("Skins", "swords")
+
+Tab_Skins:CreateLabel("this skin changer script by twistedk1d (not made me)", "code", Color3.fromRGB(80,80,80), false)
+
+--// ==========================================
+--// SHARED LOGIC (TEAM CHECK)
+--// ==========================================
+local function getTFolder() return CharactersFolder:FindFirstChild("Terrorists") end
+local function getCTFolder() return CharactersFolder:FindFirstChild("Counter-Terrorists") end
+
+local function isAlive()
+    local t, ct = getTFolder(), getCTFolder()
+    return (t and t:FindFirstChild(player.Name)) or (ct and ct:FindFirstChild(player.Name))
+end
+
+local function getEnemyFolder()
+    if not isAlive() then return nil end
+    local t, ct = getTFolder(), getCTFolder()
+    if t and t:FindFirstChild(player.Name) then return ct end
+    if ct and ct:FindFirstChild(player.Name) then return t end
+    return nil
+end
+
+--// ==========================================
+--// STATE VARIABLES FOR OVERLAY & FEATURES
+--// ==========================================
+local SpinbotEnabled = false
+local SpinSpeed = 50
+local AimbotEnabled = false
+local ShowFOV = true
+local FOV_Radius = 120
+local Smoothing = 3
+local AimKey = Enum.UserInputType.MouseButton2
+local isAiming = false
+local AimPrediction = true
+local TriggerBotEnabled = false
+local AutoShootEnabled = false
+local AutoKillEnabled = false
+local WallshotEnabled = false
+local HitboxEnabled = false
+local HitboxSize = 3
+local BhopEnabled = false
+local SpeedHackEnabled = false
+local WalkSpeedValue = 16
+
+-- Thirdperson variables
+local ThirdpersonEnabled = false
+local ThirdpersonDistance = 10
+
+-- Keybinds storage
+local Keybinds = {
+    Spinbot = Enum.KeyCode.Z,
+    AutoShoot = Enum.KeyCode.Q,
+    Triggerbot = Enum.KeyCode.E,
+    SpeedHack = Enum.KeyCode.X,
+    Thirdperson = Enum.KeyCode.V
+}
+
+--// ==========================================
+--// OVERLAY GUI (FPS, Ping, Title, Status & Keybinds Monitor)
+--// ==========================================
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "PirnoOverlayGUI"
+ScreenGui.ResetOnSpawn = false
+pcall(function()
+    if syn and syn.protect_gui then
+        syn.protect_gui(ScreenGui)
+        ScreenGui.Parent = CoreGui
+    elseif gethui then
+        ScreenGui.Parent = gethui()
+    else
+        ScreenGui.Parent = CoreGui
+    end
+end)
+if not ScreenGui.Parent then ScreenGui.Parent = player:WaitForChild("PlayerGui") end
+
+-- FPS, Ping & Title Overlay (Top-Right / Draggable)
+local InfoOverlay = Instance.new("Frame")
+InfoOverlay.Size = UDim2.new(0, 200, 0, 75)
+InfoOverlay.Position = UDim2.new(0.8, 0, 0.05, 0)
+InfoOverlay.BackgroundColor3 = Color3.fromRGB(15, 15, 22)
+InfoOverlay.BorderSizePixel = 0
+InfoOverlay.Active = true
+InfoOverlay.Draggable = true
+InfoOverlay.Parent = ScreenGui
+
+Instance.new("UICorner", InfoOverlay).CornerRadius = UDim.new(0, 8)
+local InfoStroke = Instance.new("UIStroke", InfoOverlay)
+InfoStroke.Color = Color3.fromRGB(150, 80, 255)
+InfoStroke.Thickness = 1.5
+
+local InfoTitle = Instance.new("TextLabel", InfoOverlay)
+InfoTitle.Size = UDim2.new(1, 0, 0, 25)
+InfoTitle.BackgroundTransparency = 1
+InfoTitle.Text = "⚡ Pirno.ccx | HVH v3.0"
+InfoTitle.TextColor3 = Color3.fromRGB(240, 200, 255)
+InfoTitle.TextSize = 11
+InfoTitle.Font = Enum.Font.GothamBold
+
+local InfoStats = Instance.new("TextLabel", InfoOverlay)
+InfoStats.Size = UDim2.new(0.9, 0, 1, -25)
+InfoStats.Position = UDim2.new(0.05, 0, 0, 25)
+InfoStats.BackgroundTransparency = 1
+InfoStats.TextColor3 = Color3.fromRGB(200, 200, 200)
+InfoStats.TextSize = 10
+InfoStats.Font = Enum.Font.Code
+InfoStats.TextXAlignment = Enum.TextXAlignment.Left
+InfoStats.TextYAlignment = Enum.TextYAlignment.Top
+
+-- FPS and Ping calculation variables
+local lastUpdate = tick()
+local frameCount = 0
+local currentFPS = 60
+
+RunService.RenderStepped:Connect(function()
+    frameCount = frameCount + 1
+    local now = tick()
+    if now - lastUpdate >= 1 then
+        currentFPS = math.floor(frameCount / (now - lastUpdate))
+        frameCount = 0
+        lastUpdate = now
+    end
+    
+    local ping = 0
+    pcall(function()
+        ping = math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
+    end)
+    
+    InfoStats.Text = string.format(" FPS: %d | Ping: %dms\n Status: Active [Safe]", currentFPS, ping)
+end)
+
+-- Floating Spinbot/Control Menu
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 210, 0, 120)
+MainFrame.Position = UDim2.new(0.05, 0, 0.4, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner", MainFrame)
+UICorner.CornerRadius = UDim.new(0, 8)
+local UIStroke = Instance.new("UIStroke", MainFrame)
+UIStroke.Color = Color3.fromRGB(150, 80, 255)
+UIStroke.Thickness = 1.5
+
+local TitleLabel = Instance.new("TextLabel", MainFrame)
+TitleLabel.Size = UDim2.new(1, 0, 0, 30)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Text = "Pirno.ccx | Spinbot Menu"
+TitleLabel.TextColor3 = Color3.fromRGB(240, 240, 240)
+TitleLabel.TextSize = 12
+TitleLabel.Font = Enum.Font.GothamBold
+
+local ToggleButton = Instance.new("TextButton", MainFrame)
+ToggleButton.Size = UDim2.new(0.9, 0, 0, 32)
+ToggleButton.Position = UDim2.new(0.05, 0, 0, 35)
+ToggleButton.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+ToggleButton.TextColor3 = Color3.fromRGB(255, 100, 100)
+ToggleButton.Text = "Spinbot: OFF [Z]"
+ToggleButton.TextSize = 12
+ToggleButton.Font = Enum.Font.GothamBold
+Instance.new("UICorner", ToggleButton).CornerRadius = UDim.new(0, 6)
+
+ToggleButton.MouseButton1Click:Connect(function()
+    SpinbotEnabled = not SpinbotEnabled
+    ToggleButton.Text = SpinbotEnabled and "Spinbot: ON [Z]" or "Spinbot: OFF [Z]"
+    ToggleButton.TextColor3 = SpinbotEnabled and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 100, 100)
+end)
+
+local SpeedLabel = Instance.new("TextLabel", MainFrame)
+SpeedLabel.Size = UDim2.new(0.9, 0, 0, 25)
+SpeedLabel.Position = UDim2.new(0.05, 0, 0, 75)
+SpeedLabel.BackgroundTransparency = 1
+SpeedLabel.Text = "Spin Speed: 50"
+SpeedLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+SpeedLabel.TextSize = 11
+SpeedLabel.Font = Enum.Font.Gotham
+
+-- Status Overlay (Keybinds & Features Active Status Display)
+local StatusFrame = Instance.new("Frame", ScreenGui)
+StatusFrame.Size = UDim2.new(0, 180, 0, 185)
+StatusFrame.Position = UDim2.new(0.05, 0, 0.55, 0)
+StatusFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 22)
+StatusFrame.BorderSizePixel = 0
+StatusFrame.Active = true
+StatusFrame.Draggable = true
+Instance.new("UICorner", StatusFrame).CornerRadius = UDim.new(0, 8)
+local StatusStroke = Instance.new("UIStroke", StatusFrame)
+StatusStroke.Color = Color3.fromRGB(100, 100, 200)
+StatusStroke.Thickness = 1
+
+local StatusTitle = Instance.new("TextLabel", StatusFrame)
+StatusTitle.Size = UDim2.new(1, 0, 0, 25)
+StatusTitle.BackgroundTransparency = 1
+StatusTitle.Text = "── Status Overlay ──"
+StatusTitle.TextColor3 = Color3.fromRGB(200, 200, 255)
+StatusTitle.TextSize = 11
+StatusTitle.Font = Enum.Font.GothamBold
+
+local StatusList = Instance.new("TextLabel", StatusFrame)
+StatusList.Size = UDim2.new(0.9, 0, 1, -30)
+StatusList.Position = UDim2.new(0.05, 0, 0, 25)
+StatusList.BackgroundTransparency = 1
+StatusList.TextColor3 = Color3.fromRGB(220, 220, 220)
+StatusList.TextSize = 10
+StatusList.Font = Enum.Font.Code
+StatusList.TextXAlignment = Enum.TextXAlignment.Left
+StatusList.TextYAlignment = Enum.TextYAlignment.Top
+
+RunService.RenderStepped:Connect(function()
+    local text = string.format(
+        " [F] Aimbot:     %s\n [F] Trigger:    %s\n [F] AutoShoot:%s\n [F] Spinbot:    %s\n [F] Wallshot: %s\n [F] Hitbox:     %s\n [F] Speed:      %s\n [F] 3rd Person: %s",
+        AimbotEnabled and "[ON]" or "[OFF]",
+        TriggerBotEnabled and "[ON]" or "[OFF]",
+        AutoShootEnabled and "[ON]" or "[OFF]",
+        SpinbotEnabled and "[ON]" or "[OFF]",
+        WallshotEnabled and "[ON]" or "[OFF]",
+        HitboxEnabled and "[ON]" or "[OFF]",
+        SpeedHackEnabled and "[ON]" or "[OFF]",
+        ThirdpersonEnabled and "[ON]" or "[OFF]"
+    )
+    StatusList.Text = text
+end)
+
+--// ==========================================
+--// AIMBOT & FOV DRAWING
+--// ==========================================
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Position = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+FOVCircle.Radius = FOV_Radius
+FOVCircle.Filled = false
+FOVCircle.Color = Color3.fromRGB(150, 100, 255)
+FOVCircle.Visible = ShowFOV
+FOVCircle.Thickness = 1.5
+
+local function getClosestEnemyToMouse()
+    local closestEnemy = nil
+    local shortestDistance = FOV_Radius
+    local enemyFolder = getEnemyFolder()
+    
+    if not enemyFolder or not AimbotEnabled then return nil end
+    local mousePos = UserInputService:GetMouseLocation()
+    
+    for _, enemy in ipairs(enemyFolder:GetChildren()) do
+        local hum = enemy:FindFirstChildOfClass("Humanoid")
+        local head = enemy:FindFirstChild("Head")
+        
+        if hum and hum.Health > 0 and head then
+            local targetPos = head.Position
+            if AimPrediction then
+                local rootPart = enemy:FindFirstChild("HumanoidRootPart")
+                if rootPart then targetPos = targetPos + (rootPart.Velocity * 0.05) end
+            end
+            
+            local headPos, onScreen = camera:WorldToViewportPoint(targetPos)
+            if onScreen then
+                local distance = (Vector2.new(headPos.X, headPos.Y) - mousePos).Magnitude
+                if distance < shortestDistance then
+                    shortestDistance = distance
+                    closestEnemy = head
+                end
+            end
+        end
+    end
+    return closestEnemy
+end
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if input.UserInputType == AimKey then isAiming = true end
+    
+    if not gameProcessed then
+        if input.KeyCode == Keybinds.Spinbot then
+            SpinbotEnabled = not SpinbotEnabled
+            ToggleButton.Text = SpinbotEnabled and "Spinbot: ON [Z]" or "Spinbot: OFF [Z]"
+            ToggleButton.TextColor3 = SpinbotEnabled and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 100, 100)
+        elseif input.KeyCode == Keybinds.AutoShoot then
+            AutoShootEnabled = not AutoShootEnabled
+        elseif input.KeyCode == Keybinds.Triggerbot then
+            TriggerBotEnabled = not TriggerBotEnabled
+        elseif input.KeyCode == Keybinds.SpeedHack then
+            SpeedHackEnabled = not SpeedHackEnabled
+        elseif input.KeyCode == Keybinds.Thirdperson then
+            ThirdpersonEnabled = not ThirdpersonEnabled
+        end
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == AimKey then isAiming = false end
+end)
+
+RunService.RenderStepped:Connect(function()
+    if ShowFOV then
+        FOVCircle.Position = UserInputService:GetMouseLocation()
+        FOVCircle.Radius = FOV_Radius
+        FOVCircle.Visible = true
+    else
+        FOVCircle.Visible = false
+    end
+
+    if isAiming and isAlive() and AimbotEnabled then
+        local targetHead = getClosestEnemyToMouse()
+        if targetHead then
+            local targetPos = targetHead.Position
+            if AimPrediction then
+                local model = targetHead.Parent
+                local rootPart = model and model:FindFirstChild("HumanoidRootPart")
+                if rootPart then targetPos = targetPos + (rootPart.Velocity * 0.05) end
+            end
+            
+            local headPos = camera:WorldToViewportPoint(targetPos)
+            local mousePos = UserInputService:GetMouseLocation()
+            local moveX = (headPos.X - mousePos.X) / Smoothing
+            local moveY = (headPos.Y - mousePos.Y) / Smoothing
+            
+            if mousemoverel then mousemoverel(moveX, moveY) end
+        end
+    end
+end)
+
+--// ==========================================
+--// COMBAT TAB SETUP
+--// ==========================================
+Tab_Combat:CreateSection("Aimbot & FOV")
+Tab_Combat:CreateToggle({
+    Name = "Enable Aimbot (Hold Right Click)",
+    CurrentValue = false,
+    Flag = "AimbotToggle",
+    Callback = function(Value) AimbotEnabled = Value end
+})
+
+Tab_Combat:CreateToggle({
+    Name = "Show FOV Circle",
+    CurrentValue = true,
+    Flag = "FOVToggle",
+    Callback = function(Value) ShowFOV = Value end
+})
+
+Tab_Combat:CreateToggle({
+    Name = "Velocity Prediction",
+    CurrentValue = true,
+    Flag = "AimbotPred",
+    Callback = function(Value) AimPrediction = Value end
+})
+
+Tab_Combat:CreateSlider({
+    Name = "FOV Radius",
+    Range = {10, 500},
+    Increment = 5,
+    Suffix = "px",
+    CurrentValue = 120,
+    Flag = "FOVSlider",
+    Callback = function(Value) FOV_Radius = Value end
+})
+
+Tab_Combat:CreateSlider({
+    Name = "Aimbot Smoothing",
+    Range = {1, 10},
+    Increment = 1,
+    Suffix = " (Lower is faster)",
+    CurrentValue = 3,
+    Flag = "AimbotSmoothing",
+    Callback = function(Value) Smoothing = Value end
+})
+
+Tab_Combat:CreateSection("TriggerBot, Auto Shoot & Exploits")
+Tab_Combat:CreateToggle({
+    Name = "Enable TriggerBot",
+    CurrentValue = false,
+    Flag = "TriggerBotToggle",
+    Callback = function(Value) TriggerBotEnabled = Value end
+})
+
+Tab_Combat:CreateToggle({
+    Name = "Enable Auto Shoot (Continuous Fire)",
+    CurrentValue = false,
+    Flag = "AutoShootToggle",
+    Callback = function(Value) AutoShootEnabled = Value end
+})
+
+Tab_Combat:CreateToggle({
+    Name = "Auto Kill (Rage Exploit)",
+    CurrentValue = false,
+    Flag = "AutoKillToggle",
+    Callback = function(Value) AutoKillEnabled = Value end
+})
+
+Tab_Combat:CreateToggle({
+    Name = "Wallshot / Wallbang Bypass",
+    CurrentValue = false,
+    Flag = "WallshotToggle",
+    Callback = function(Value) WallshotEnabled = Value end
+})
+
+-- Triggerbot & Auto Shoot Loop
+task.spawn(function()
+    while task.wait(0.01) do
+        if isAlive() then
+            local enemyFolder = getEnemyFolder()
+            if enemyFolder then
+                if AutoKillEnabled then
+                    for _, enemy in ipairs(enemyFolder:GetChildren()) do
+                        local hum = enemy:FindFirstChildOfClass("Humanoid")
+                        local head = enemy:FindFirstChild("Head")
+                        if hum and hum.Health > 0 and head then
+                            pcall(function()
+                                firetouchinterest(player.Character.HumanoidRootPart, head, 0)
+                                firetouchinterest(player.Character.HumanoidRootPart, head, 1)
+                            end)
+                        end
+                    end
+                end
+
+                if TriggerBotEnabled or AutoShootEnabled then
+                    local viewportSize = camera.ViewportSize
+                    local ray = camera:ViewportPointToRay(viewportSize.X / 2, viewportSize.Y / 2)
+                    local raycastParams = RaycastParams.new()
+                    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+                    
+                    local ignoreList = {camera}
+                    if player.Character then table.insert(ignoreList, player.Character) end
+                    if WallshotEnabled then
+                        raycastParams.FilterType = Enum.RaycastFilterType.Include
+                        raycastParams.FilterDescendantsInstances = {enemyFolder}
+                    else
+                        raycastParams.FilterDescendantsInstances = ignoreList
+                    end
+                    
+                    local result = Workspace:Raycast(ray.Origin, ray.Direction * 1000, raycastParams)
+                    if result and result.Instance then
+                        local hitPart = result.Instance
+                        local model = hitPart:FindFirstAncestorOfClass("Model")
+                        if model and model:FindFirstChildOfClass("Humanoid") then
+                            if model.Parent == enemyFolder then
+                                local hum = model:FindFirstChildOfClass("Humanoid")
+                                if hum and hum.Health > 0 then
+                                    if mouse1click then mouse1click() end
+                                    task.wait(0.04)
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- Hitbox Extender
+Tab_Combat:CreateSection("Hitbox Extender")
+Tab_Combat:CreateToggle({
+    Name = "Enable Hitbox Expander",
+    CurrentValue = false,
+    Flag = "HitboxToggle",
+    Callback = function(Value) HitboxEnabled = Value end
+})
+
+Tab_Combat:CreateSlider({
+    Name = "Hitbox Size",
+    Range = {1, 4},
+    Increment = 0.1,
+    Suffix = " Studs",
+    CurrentValue = 3,
+    Flag = "HitboxSize",
+    Callback = function(Value) HitboxSize = Value end
+})
+
+local originalHeadSizes = {}
+task.spawn(function()
+    while task.wait(0.5) do
+        local enemyFolder = getEnemyFolder()
+        if enemyFolder then
+            for _, enemy in ipairs(enemyFolder:GetChildren()) do
+                local head = enemy:FindFirstChild("Head")
+                local hum = enemy:FindFirstChildOfClass("Humanoid")
+                if head and hum and hum.Health > 0 then
+                    if not originalHeadSizes[head] then originalHeadSizes[head] = head.Size end
+                    if HitboxEnabled then
+                        head.Size = Vector3.new(HitboxSize, HitboxSize, HitboxSize)
+                        head.CanCollide = false
+                        head.Transparency = 0.6
+                    else
+                        if originalHeadSizes[head] and head.Size ~= originalHeadSizes[head] then
+                            head.Size = originalHeadSizes[head]
+                            head.Transparency = 0
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
+
+--// ==========================================
+--// VISUALS & ESP TAB
+--// ==========================================
+Tab_Visuals:CreateSection("Camera & Thirdperson")
+Tab_Visual:CreateToggle({
+    Name = "Enable Thirdperson View",
+    CurrentValue = false,
+    Flag = "ThirdpersonToggle",
+    Callback = function(Value) ThirdpersonEnabled = Value end
+})
+
+Tab_Visuals:CreateSlider({
+    Name = "Thirdperson Distance",
+    Range = {4, 30},
+    Increment = 1,
+    Suffix = " Studs",
+    CurrentValue = 10,
+    Flag = "ThirdpersonDist",
+    Callback = function(Value) ThirdpersonDistance = Value end
+})
+
+Tab_Visuals:CreateSection("ESP Settings")
+local ESP_Box, ESP_Chams, ESP_Snaplines, ESP_HealthBar, ESP_Name, ESP_Distance, ESP_HeadDot = false, false, false, false, false, false, false
+local ESP_Boxes, ESP_Lines, ESP_Bars, ESP_Names, ESP_Distances, ESP_Heads = {}, {}, {}, {}, {}, {}
+
+local function createDrawing(drawingType, properties)
+    local drawing = Drawing.new(drawingType)
+    for i, v in pairs(properties) do drawing[i] = v end
+    return drawing
+end
+
+Tab_Visuals:CreateToggle({ Name = "Box ESP", CurrentValue = false, Flag = "ESP_Box", Callback = function(v) ESP_Box = v end })
+Tab_Visuals:CreateToggle({ Name = "Snaplines (Tracers)", CurrentValue = false, Flag = "ESP_Snaplines", Callback = function(v) ESP_Snaplines = v end })
+Tab_Visuals:CreateToggle({ Name = "Health Bar", CurrentValue = false, Flag = "ESP_HealthBar", Callback = function(v) ESP_HealthBar = v end })
+Tab_Visuals:CreateToggle({ Name = "Name ESP", CurrentValue = false, Flag = "ESP_Name", Callback = function(v) ESP_Name = v end })
+Tab_Visuals:CreateToggle({ Name = "Distance ESP", CurrentValue = false, Flag = "ESP_Distance", Callback = function(v) ESP_Distance = v end })
+Tab_Visuals:CreateToggle({ Name = "Head Dot", CurrentValue = false, Flag = "ESP_HeadDot", Callback = function(v) ESP_HeadDot = v end })
+Tab_Visuals:CreateToggle({ Name = "Chams (Highlight)", CurrentValue = false, Flag = "ESP_Chams", Callback = function(v) ESP_Chams = v end })
+
+RunService.RenderStepped:Connect(function()
+    --// ИСПРАВЛЕННЫЙ ТРЕТЬЕГО ЛИЦА (THIRDPERSON)
+    if ThirdpersonEnabled and isAlive() then
+        local myModel = getTFolder() and getTFolder():FindFirstChild(player.Name) or (getCTFolder() and getCTFolder():FindFirstChild(player.Name))
+        local rootPart = myModel and myModel:FindFirstChild("HumanoidRootPart")
+        
+        if rootPart then
+            player.CameraMode = Enum.CameraMode.Classic
+            
+            -- Получаем текущий поворот камеры (направление взгляда игрока)
+            local camCFrame = camera.CFrame
+            local camLookVector = camCFrame.LookVector
+            
+            -- Отодвигаем камеру назад от персонажа на заданную дистанцию (ThirdpersonDistance)
+            -- Слегка поднимаем вверх (Vector3.new(0, 2, 0)), чтобы камера смотрела в район плеча/головы
+            local targetPos = rootPart.Position + Vector3.new(0, 2, 0)
+            local newCameraCFrame = CFrame.new(targetPos - (camLookVector * ThirdpersonDistance), targetPos)
+            
+            camera.CFrame = newCameraCFrame
+            camera.CameraSubject = rootPart -- Возвращаем нормальный Subject, чтобы персонаж не ломался
+            
+            -- Отключаем баги с зумом
+            player.CameraMaxZoomDistance = ThirdpersonDistance
+            player.CameraMinZoomDistance = ThirdpersonDistance
+        end
+    else
+        player.CameraMaxZoomDistance = 400
+        player.CameraMinZoomDistance = 0.5
+        if isAlive() then
+            local myModel = getTFolder() and getTFolder():FindFirstChild(player.Name) or (getCTFolder() and getCTFolder():FindFirstChild(player.Name))
+            local hum = myModel and myModel:FindFirstChildOfClass("Humanoid")
+            if hum then camera.CameraSubject = hum end
+        end
+    end
+
+    local enemyFolder = getEnemyFolder()
+    if not enemyFolder then
+        for _, t in pairs(ESP_Boxes) do if t.Box then t.Box:Remove() end end
+        for _, t in pairs(ESP_Lines) do t:Remove() end
+        for _, t in pairs(ESP_Bars) do if t.Bar then t.Bar:Remove() end if t.BG then t.BG:Remove() end end
+        for _, t in pairs(ESP_Names) do t:Remove() end
+        for _, t in pairs(ESP_Distances) do t:Remove() end
+        for _, t in pairs(ESP_Heads) do t:Remove() end
+        ESP_Boxes, ESP_Lines, ESP_Bars, ESP_Names, ESP_Distances, ESP_Heads = {}, {}, {}, {}, {}, {}
+        return
+    end
+
+    for _, enemy in ipairs(enemyFolder:GetChildren()) do
+        local hum = enemy:FindFirstChildOfClass("Humanoid")
+        local root = enemy:FindFirstChild("HumanoidRootPart")
+        local head = enemy:FindFirstChild("Head")
+        
+        if hum and hum.Health > 0 and root then
+            local pos, onScreen = camera:WorldToViewportPoint(root.Position)
+            
+            -- Box ESP
+            if ESP_Box then
+                if not ESP_Boxes[enemy] then ESP_Boxes[enemy] = { Box = createDrawing("Square", {Visible = false, Thickness = 1, Color = Color3.fromRGB(255, 50, 50), Filled = false}) } end
+                if onScreen then
+                    local size = Vector2.new(2000 / pos.Z, 3000 / pos.Z)
+                    local boxPos = Vector2.new(pos.X - size.X / 2, pos.Y - size.Y / 2)
+                    ESP_Boxes[enemy].Box.Size = size
+                    ESP_Boxes[enemy].Box.Position = boxPos
+                    ESP_Boxes[enemy].Box.Visible = true
+                else
+                    ESP_Boxes[enemy].Box.Visible = false
+                end
+            elseif ESP_Boxes[enemy] and ESP_Boxes[enemy].Box then
+                ESP_Boxes[enemy].Box.Visible = false
+            end
+
+            -- Tracers
+            if ESP_Snaplines then
+                if not ESP_Lines[enemy] then ESP_Lines[enemy] = createDrawing("Line", {Visible = false, Thickness = 1, Color = Color3.fromRGB(200, 200, 255)}) end
+                if onScreen then
+                    ESP_Lines[enemy].From = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y)
+                    ESP_Lines[enemy].To = Vector2.new(pos.X, pos.Y)
+                    ESP_Lines[enemy].Visible = true
+                else
+                    ESP_Lines[enemy].Visible = false
+                end
+            elseif ESP_Lines[enemy] then
+                ESP_Lines[enemy].Visible = false
+            end
+
+            -- Health Bar
+            if ESP_HealthBar then
+                if not ESP_Bars[enemy] then
+                    ESP_Bars[enemy] = {
+                        BG = createDrawing("Square", {Visible = false, Filled = true, Color = Color3.fromRGB(0, 0, 0)}),
+                        Bar = createDrawing("Square", {Visible = false, Filled = true, Color = Color3.fromRGB(0, 255, 0)})
+                    }
+                end
+                if onScreen then
+                    local size = Vector2.new(2000 / pos.Z, 3000 / pos.Z)
+                    local boxPos = Vector2.new(pos.X - size.X / 2, pos.Y - size.Y / 2)
+                    local hpPct = math.clamp(hum.Health / hum.MaxHealth, 0, 1)
+                    ESP_Bars[enemy].BG.Size = Vector2.new(3, size.Y)
+                    ESP_Bars[enemy].BG.Position = Vector2.new(boxPos.X - 6, boxPos.Y)
+                    ESP_Bars[enemy].BG.Visible = true
+                    
+                    ESP_Bars[enemy].Bar.Size = Vector2.new(1, size.Y * hpPct)
+                    ESP_Bars[enemy].Bar.Position = Vector2.new(boxPos.X - 5, boxPos.Y + (size.Y * (1 - hpPct)))
+                    ESP_Bars[enemy].Bar.Color = Color3.fromRGB(255 - (hpPct * 255), hpPct * 255, 0)
+                    ESP_Bars[enemy].Bar.Visible = true
+                else
+                    ESP_Bars[enemy].BG.Visible = false
+                    ESP_Bars[enemy].Bar.Visible = false
+                end
+            elseif ESP_Bars[enemy] then
+                ESP_Bars[enemy].BG.Visible = false
+                ESP_Bars[enemy].Bar.Visible = false
+            end
+
+            -- Name ESP
+            if ESP_Name then
+                if not ESP_Names[enemy] then ESP_Names[enemy] = createDrawing("Text", {Visible = false, Center = true, Size = 12, Color = Color3.fromRGB(255, 255, 255), Outline = true}) end
+                if onScreen then
+                    local size = Vector2.new(2000 / pos.Z, 3000 / pos.Z)
+                    ESP_Names[enemy].Text = enemy.Name
+                    ESP_Names[enemy].Position = Vector2.new(pos.X, pos.Y - size.Y / 2 - 16)
+                    ESP_Names[enemy].Visible = true
+                else
+                    ESP_Names[enemy].Visible = false
+                end
+            elseif ESP_Names[enemy] then
+                ESP_Names[enemy].Visible = false
+            end
+
+            -- Chams
+            if ESP_Chams then
+                local hl = enemy:FindFirstChild("HVH_Highlight")
+                if not hl then
+                    hl = Instance.new("Highlight")
+                    hl.Name = "HVH_Highlight"
+                    hl.FillColor = Color3.fromRGB(255, 50, 50)
+                    hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+                    hl.FillTransparency = 0.5
+                    hl.Parent = enemy
+                end
+            else
+                local hl = enemy:FindFirstChild("HVH_Highlight")
+                if hl then hl:Destroy() end
+            end
+        end
+    end
+end)
+
+--// ==========================================
+--// MISC & MOVEMENT TAB
+--// ==========================================
+Tab_Misc:CreateSection("Movement Tweaks")
+Tab_Misc:CreateToggle({
+    Name = "Enable Bunny Hop (Hold Space)",
+    CurrentValue = false,
+    Flag = "BhopToggle",
+    Callback = function(Value) BhopEnabled = Value end
+})
+
+Tab_Misc:CreateToggle({
+    Name = "Enable SpeedHack",
+    CurrentValue = false,
+    Flag = "SpeedToggle",
+    Callback = function(Value) SpeedHackEnabled = Value end
+})
+
+Tab_Misc:CreateSlider({
+    Name = "WalkSpeed",
+    Range = {16, 60},
+    Increment = 1,
+    CurrentValue = 16,
+    Flag = "SpeedSlider",
+    Callback = function(Value) WalkSpeedValue = Value end
+})
+
+RunService.RenderStepped:Connect(function()
+    if BhopEnabled and UserInputService:IsKeyDown(Enum.KeyCode.Space) and isAlive() then
+        local myChar = player.Character
+        if myChar then
+            local hum = myChar:FindFirstChildOfClass("Humanoid")
+            if hum and hum:GetState() ~= Enum.HumanoidStateType.Jumping then hum.Jump = true end
+        end
+    end
+
+    if SpeedHackEnabled and isAlive() then
+        local myChar = player.Character
+        if myChar then
+            local hum = myChar:FindFirstChildOfClass("Humanoid")
+            if hum then hum.WalkSpeed = WalkSpeedValue end
+        end
+    end
+
+    if SpinbotEnabled and isAlive() then
+        SpeedLabel.Text = "Spin Speed: " .. tostring(SpinSpeed)
+        local myModel = getTFolder() and getTFolder():FindFirstChild(player.Name) or (getCTFolder() and getCTFolder():FindFirstChild(player.Name))
+        if myModel then
+            local rootPart = myModel:FindFirstChild("HumanoidRootPart")
+            if rootPart then
+                local currentPos = rootPart.CFrame.Position
+                local spinAngle = (os.clock() * SpinSpeed) % 360
+                rootPart.CFrame = CFrame.new(currentPos) * CFrame.Angles(0, math.rad(spinAngle), 0)
+            end
+        end
+    end
+end)
+
+--// ==========================================
+--// KEYBINDS CONFIGURATION TAB
+--// ==========================================
+Tab_Keybinds:CreateSection("Keybind Management")
+Tab_Keybinds:CreateLabel("Click to rebind features to keys:")
+
+Tab_Keybinds:CreateKeybind({
+    Name = "Spinbot Toggle Key",
+    CurrentKeybind = "Z",
+    HoldToInteract = false,
+    Flag = "Keybind_Spinbot",
+    Callback = function(Key) Keybinds.Spinbot = Key end
+})
+
+Tab_Keybinds:CreateKeybind({
+    Name = "Auto Shoot Toggle Key",
+    CurrentKeybind = "Q",
+    HoldToInteract = false,
+    Flag = "Keybind_AutoShoot",
+    Callback = function(Key) Keybinds.AutoShoot = Key end
+})
+
+Tab_Keybinds:CreateKeybind({
+    Name = "Triggerbot Toggle Key",
+    CurrentKeybind = "E",
+    HoldToInteract = false,
+    Flag = "Keybind_Triggerbot",
+    Callback = function(Key) Keybinds.Triggerbot = Key end
+})
+
+Tab_Keybinds:CreateKeybind({
+    Name = "SpeedHack Toggle Key",
+    CurrentKeybind = "X",
+    HoldToInteract = false,
+    Flag = "Keybind_SpeedHack",
+    Callback = function(Key) Keybinds.SpeedHack = Key end
+})
+
+Tab_Keybinds:CreateKeybind({
+    Name = "Thirdperson Toggle Key",
+    CurrentKeybind = "V",
+    HoldToInteract = false,
+    Flag = "Keybind_Thirdperson",
+    Callback = function(Key) Keybinds.Thirdperson = Key end
+})
