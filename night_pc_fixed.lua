@@ -1,41 +1,43 @@
 --[[
   NIGHTDLC · packed · night_pc_fixed
-  XOR + Base64 encryption protection
+  XOR + Base64 encryption protection (FIXED)
 ]]
 
-local function _ndlc_decode(payload, key)
-    local alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-    payload = payload:gsub("[^" .. alphabet .. "=]", "")
+local function _ndlc_b64decode(str)
+    local b = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+    str = str:gsub("[^" .. b .. "=]", "")
+    local res = {}
     
-    local data = {}
-    for char in payload:gmatch(".") do
-        local idx = alphabet:find(char, 1, true)
-        if idx then table.insert(data, idx - 1) end
-    end
-    
-    local result = {}
-    for i = 1, #data, 4 do
-        local b1 = data[i] or 0
-        local b2 = data[i+1] or 0
-        local b3 = data[i+2] or 0
-        local b4 = data[i+3] or 0
+    for i = 1, #str, 4 do
+        local c1, c2, c3, c4 = str:byte(i, i + 3)
+        c1 = c1 and b:find(string.char(c1)) - 1 or 0
+        c2 = c2 and b:find(string.char(c2)) - 1 or 0
+        c3 = c3 and b:find(string.char(c3)) - 1 or 0
+        c4 = c4 and b:find(string.char(c4)) - 1 or 0
         
-        table.insert(result, bit32.bor(bit32.lshift(b1, 2), bit32.rshift(b2, 4)))
-        if data[i+2] then
-            table.insert(result, bit32.band(bit32.lshift(b2, 4), 0xFF) + bit32.rshift(b3, 2))
+        res[#res + 1] = string.char(bit32.bor(bit32.lshift(c1, 2), bit32.rshift(c2, 4)))
+        if c3 > 0 or c4 > 0 then
+            res[#res + 1] = string.char(bit32.bor(bit32.band(bit32.lshift(c2, 4), 240), bit32.rshift(c3, 2)))
         end
-        if data[i+3] then
-            table.insert(result, bit32.band(bit32.lshift(b3, 6), 0xFF) + b4)
+        if c4 > 0 then
+            res[#res + 1] = string.char(bit32.bor(bit32.lshift(c3, 6), c4))
         end
     end
     
-    local decrypted = {}
-    for i, byte in ipairs(result) do
+    return table.concat(res)
+end
+
+local function _ndlc_decode(payload, key)
+    local b64data = _ndlc_b64decode(payload)
+    local result = {}
+    
+    for i = 1, #b64data do
+        local byte = b64data:byte(i)
         local xor_key = bit32.bxor(key, (i - 1) % 256)
-        table.insert(decrypted, string.char(bit32.bxor(byte, xor_key)))
+        result[#result + 1] = string.char(bit32.bxor(byte, xor_key))
     end
     
-    return table.concat(decrypted)
+    return table.concat(result)
 end
 
 local _KEY = 66
